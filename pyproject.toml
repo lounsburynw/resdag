@@ -1,0 +1,11 @@
+[project]
+name = "resdag-workspace"
+version = "0.1.0"
+description = "Workspace root for resdag and reslab"
+requires-python = ">=3.11"
+
+[tool.uv.workspace]
+members = ["packages/*"]
+
+[tool.uv.sources]
+resdag = { workspace = true }

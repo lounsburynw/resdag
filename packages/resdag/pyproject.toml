@@ -1,0 +1,35 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "resdag"
+version = "0.1.0"
+description = "Decentralized, content-addressed DAG for research claims"
+requires-python = ">=3.11"
+dependencies = [
+    "click>=8.0",
+    "cryptography>=42.0",
+    "multiformats>=0.3",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov",
+]
+export = [
+    "jinja2>=3.0",
+]
+discover = [
+    "sentence-transformers>=2.0",
+]
+
+[project.scripts]
+res = "resdag.cli:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/resdag"]

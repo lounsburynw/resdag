@@ -1,0 +1,347 @@
+{
+  "phase": "phase_2_autonomous_research_substrate",
+  "items": [
+    {
+      "name": "project_scaffold",
+      "category": "infrastructure",
+      "priority": 0,
+      "status": "done",
+      "description": "Create project directory structure, pyproject.toml, basic imports, and empty module files matching the structure in CLAUDE.md",
+      "test_file": "tests/test_scaffold.py",
+      "acceptance": "All directories exist, all __init__.py files present, pyproject.toml is valid, `import resdag` succeeds"
+    },
+    {
+      "name": "claim_format",
+      "category": "core",
+      "priority": 0,
+      "status": "done",
+      "description": "Define the Claim data structure: claim text, type enum (result/method/hypothesis/replication/equivalence/refutation), parent CIDs, evidence CIDs, domain tags, author DID, timestamp, signature. Serialization to/from JSON. Content-addressed hashing (CID generation).",
+      "test_file": "tests/test_claim.py",
+      "acceptance": "Can create, serialize, deserialize claims. CID is deterministic from content. Round-trip test passes. Two identical claims produce same CID."
+    },
+    {
+      "name": "local_storage",
+      "category": "core",
+      "priority": 0,
+      "status": "done",
+      "description": "Content-addressed local storage backend. Store claims and evidence by CID. Retrieve by CID. List all claims. Git-friendly directory layout (objects/ like git).",
+      "test_file": "tests/test_storage.py",
+      "acceptance": "Can store and retrieve claims by CID. Duplicate writes are no-ops. Storage directory is git-friendly."
+    },
+    {
+      "name": "dag_operations",
+      "category": "core",
+      "priority": 0,
+      "status": "done",
+      "description": "DAG construction and traversal. Add claims with parent validation. Walk ancestors/descendants. Find roots (claims with no parents). Find leaves (claims with no children). Detect independent convergence (same-claim, no common recent ancestor).",
+      "test_file": "tests/test_dag.py",
+      "acceptance": "Can build a DAG of claims, traverse it, find roots/leaves. Parent references validated on insert."
+    },
+    {
+      "name": "cli_basics",
+      "category": "interface",
+      "priority": 0,
+      "status": "done",
+      "description": "Basic CLI: `res init` (create local store), `res commit` (create a claim interactively), `res log` (list claims), `res show <cid>` (display a claim and its context).",
+      "test_file": "tests/test_cli.py",
+      "acceptance": "`res init` creates .resdag/ directory. `res commit` creates a claim. `res log` lists it. `res show` displays it with parents."
+    },
+    {
+      "name": "evidence_artifacts",
+      "category": "core",
+      "priority": 0,
+      "status": "done",
+      "description": "Evidence artifact handling. Store arbitrary files (data, code, images) as content-addressed objects. Link evidence CIDs to claims. Support inline evidence (small data embedded in claim) and external evidence (CID reference to stored artifact).",
+      "test_file": "tests/test_evidence.py",
+      "acceptance": "Can attach a CSV file and a JSON file as evidence to a claim. Evidence retrievable by CID. Evidence listed when showing a claim."
+    },
+    {
+      "name": "identity",
+      "category": "core",
+      "priority": 0,
+      "status": "done",
+      "description": "DID-based author identity. Generate keypair, create DID. Sign claims with private key. Verify claim signatures. Identity portable across devices.",
+      "test_file": "tests/test_identity.py",
+      "acceptance": "Can generate identity, sign a claim, verify the signature. Tampering with claim content invalidates signature."
+    },
+    {
+      "name": "static_site_generator",
+      "category": "export",
+      "priority": 0,
+      "status": "done",
+      "description": "Generate a static website from a local DAG. Each claim becomes a page. Parent links become navigation. Evidence linked/embedded. Domain tags become categories. Deployable to GitHub Pages.",
+      "test_file": "tests/test_export.py",
+      "acceptance": "`res export --site ./site` generates HTML. Claims render as pages with parent/child navigation. `python -m http.server` serves it locally."
+    },
+    {
+      "name": "verification_receipts",
+      "category": "verification",
+      "priority": 0,
+      "status": "done",
+      "description": "Verification receipt structure. A receipt is itself a claim of type 'verification' that references the verified claim as parent. Contains: method, result (verified/unverified/partial), confidence, verifier identity, timestamp.",
+      "test_file": "tests/test_verify.py",
+      "acceptance": "Can create a verification receipt, attach it to a claim. Receipt is a DAG node. Querying a claim shows its verification status."
+    },
+    {
+      "name": "equivalence_claims",
+      "category": "discovery",
+      "priority": 0,
+      "status": "done",
+      "description": "Equivalence claim support. A claim of type 'equivalence' with two parents asserts they are semantically equivalent within a stated scope. Scoped equivalence (equivalent-under-what-interpretation). Query: find all claims equivalent to a given claim.",
+      "test_file": "tests/test_equivalence.py",
+      "acceptance": "Can create an equivalence claim linking two result claims. Scope field is required. Query returns equivalence cluster."
+    },
+    {
+      "name": "cli_log_filters",
+      "category": "interface",
+      "priority": 0,
+      "status": "done",
+      "description": "Add --domain, --type, and --after/--before filters to `res log`. Currently `res log` returns all claims sorted by CID hash, which is unusable at scale. Real-world usage (66 claims) immediately needed `res log --domain grokking` and `res log --type refutation`.",
+      "test_file": "tests/test_cli.py",
+      "acceptance": "`res log --domain grokking` shows only claims with 'grokking' domain tag. `res log --type refutation` shows only refutations. `res log --after 2026-03-30` shows claims after date. Filters compose (AND semantics)."
+    },
+    {
+      "name": "cli_commit_timestamp",
+      "category": "interface",
+      "priority": 2,
+      "status": "done",
+      "description": "Add --timestamp flag to `res commit` for backdating claims. Currently historical timestamps can only be set via the Python API. Real-world usage: retrofitting 62 sessions of prior results required a script because the CLI has no way to set timestamps.",
+      "test_file": "tests/test_cli.py",
+      "acceptance": "`res commit -c '...' -t result --timestamp 2026-03-15T00:00:00Z` creates a claim with the specified timestamp instead of now."
+    },
+    {
+      "name": "dag_lineage",
+      "category": "interface",
+      "priority": 0,
+      "status": "done",
+      "description": "Read-side structural queries that progress logs can't answer. `res lineage <cid>` shows full ancestor/descendant chain as an indented tree. `res log --orphans` finds parentless claims that aren't intentional roots (committed without -p). `res log --unverified` shows claims with no verification receipts. Addresses the 'write-only value' gap from real usage feedback.",
+      "test_file": "tests/test_cli.py",
+      "acceptance": "`res lineage <cid>` prints the ancestor chain up and descendant chain down with indentation showing depth. `res log --orphans` lists claims with no parents that have type != hypothesis (likely missing parent links). `res log --unverified` lists claims with no VERIFICATION children."
+    },
+    {
+      "name": "cli_supersede",
+      "category": "interface",
+      "priority": 0,
+      "status": "done",
+      "description": "Protocol-correct cleanup for orphaned or duplicate claims. `res supersede <old-cid> <new-cid>` creates a REFUTATION claim with old as parent, stating the new claim supersedes it and linking to the replacement. Addresses the orphan problem: 3 claims for the same result (2 orphaned, 1 correct) can be cleaned up by superseding the orphans.",
+      "test_file": "tests/test_cli.py",
+      "acceptance": "`res supersede <old> <new>` creates a refutation claim with old-cid as parent. `res show <old>` displays the supersession. `res log` can filter out superseded claims with `--active` flag."
+    },
+    {
+      "name": "cli_quick_commit",
+      "category": "interface",
+      "priority": 0,
+      "status": "done",
+      "description": "Lighter commit mode to reduce ceremony during active work. `res note 'finding text'` is sugar for `res commit -c '...' -t result` — defaults to type=result, no domain/evidence required. Reduces context-switch cost when deep in debugging. Full `res commit` still available for careful claims with evidence and lineage.",
+      "test_file": "tests/test_cli.py",
+      "acceptance": "`res note 'grokking happens at 10k steps'` creates a result claim with no domain, no evidence, no parents. Exit code 0. Claim appears in `res log`."
+    },
+    {
+      "name": "claim_autogen",
+      "category": "interface",
+      "priority": 0,
+      "status": "done",
+      "description": "Auto-generate claims from structured experiment outputs. `res ingest <results.json>` parses experiment JSON (e.g., cloud training runs) and creates result/method claims with evidence attached. Reduces manual claim authoring — the biggest barrier to DAG density. Supports configurable mappings (JSON field → claim text template, domain tags, type). Addresses feedback: 70 claims all manually written, experiment outputs already contain the data.",
+      "test_file": "tests/test_cli.py",
+      "acceptance": "`res ingest results.json --template 'Accuracy: {accuracy}% at {steps} steps'` creates a result claim with results.json as evidence. Domains inferred from template config or --domain flag. Multiple results in a JSON array create multiple claims."
+    },
+    {
+      "name": "feed_generation",
+      "category": "export",
+      "priority": 0,
+      "status": "done",
+      "description": "Generate Atom (RFC 4287) feeds from a local DAG. Each claim becomes a feed entry with type badge, domain categories, author, and optional links to a static site. Supports domain filtering, custom titles, and base URL for link generation. Integrates with `res export --feed`.",
+      "test_file": "tests/test_feed.py",
+      "acceptance": "`res export ./dir --feed` generates feed.xml. Entries sorted newest-first. Domain tags as Atom categories. `--feed-title` and `--base-url` flags work. `--site --feed` generates both. Domain filter via `-d` flag."
+    },
+    {
+      "name": "sync_protocol",
+      "category": "sync",
+      "priority": 0,
+      "status": "done",
+      "description": "Peer synchronization. Push/pull claims between local stores. Gossip protocol for discovery. Content-addressing makes dedup automatic. Conflict-free (DAG is append-only).",
+      "test_file": "tests/test_sync.py",
+      "acceptance": "Two local stores can sync. Claims present in one appear in both after sync. No duplicates. No conflicts."
+    },
+    {
+      "name": "subgraph_export",
+      "category": "core",
+      "priority": 0,
+      "status": "done",
+      "description": "Extract a subgraph from a DAG as a standalone DAG. Select claims by CID, domain, date range, or ancestry. Exported subgraph is self-contained (all referenced parents included or marked as external roots). Enables publishing subsets of firewalled DAGs without leaking unselected context.",
+      "test_file": "tests/test_export.py",
+      "acceptance": "Can select a subset of claims from a DAG, export as standalone DAG. Exported DAG is valid (no dangling parent references). Claims not selected are not present in export. Evidence only included if explicitly selected."
+    },
+    {
+      "name": "domain_vocabulary",
+      "category": "workflow",
+      "priority": 0,
+      "status": "done",
+      "description": "Controlled vocabulary system for reslab domain tags. A vocabulary config file (.resdag/vocabulary.json) defines canonical tags (~12-15) with descriptions and alias lists. All `lab` commit commands normalize tags through the vocabulary: exact matches pass, aliases resolve to canonical tags, unknown tags prompt a warning with nearest-match suggestions. `lab migrate-tags` rewrites domain tags on all existing claims in a store to canonical form. Site renderer normalizes tags at render time — filter bar shows only canonical tags, claim cards use normalized domains. Vocabulary travels with `lab push` so rendered sites at the target use canonical tags too.",
+      "test_file": "packages/reslab/tests/test_vocabulary.py",
+      "acceptance": "Vocabulary config with 12-15 canonical tags and alias mappings. `lab hypothesize --domain lean-verification '...'` normalizes to domains=['lean', 'verification']. Unknown tag 'foobar' prints warning with top-3 nearest matches. `lab migrate-tags` processes all claims, reports count of tags normalized. Filter bar on rendered site shows only canonical tags. Vocabulary copied to target on `lab push`."
+    },
+    {
+      "name": "project_profiles",
+      "category": "workflow",
+      "priority": 0,
+      "status": "done",
+      "description": "`lab init --mode <mode>` generates a project profile that shapes all future commits. Three modes: `exploratory` (fast iteration, vocabulary warnings only, lab note is primary, no structure enforcement), `disciplined` (hypothesis-first encouraged, templates surfaced via /claim command, warn on missing hypothesis parent and unstructured text), `strict` (hypothesis-first required, templates enforced, unknown vocab tags rejected, lab note disabled). Generates: .resdag/profile.json (mode + audience + validation rules), .resdag/vocabulary.json (canonical tags), .resdag/templates/ (hypothesis.md, result.md, method.md — disciplined + strict), .claude/commands/claim.md (/claim slash command — disciplined + strict), .claude/commands/retrofit.md (/retrofit slash command — disciplined + strict), CLAUDE.md fragment (all modes). When init detects an existing store, it reports DAG health (hypothesis count, orphan rate, structure coverage) and notes that /retrofit is available for restructuring existing claims. Modes are presets for profile.json — users can mix and match rules after init. `lab config set mode strict` re-generates artifacts without losing existing claims. See ADR-001 for full design.",
+      "test_file": "packages/reslab/tests/test_profiles.py",
+      "acceptance": "`lab init --mode disciplined` creates profile.json, vocabulary.json, templates/, .claude/commands/claim.md, .claude/commands/retrofit.md, and appends CLAUDE.md fragment. `lab init --mode exploratory` creates profile.json and vocabulary.json only. `lab init --mode strict` creates all artifacts plus .critics/claims.review.critic.md. On an existing store with claims, init reports DAG health summary and mentions /retrofit. Re-running init with different mode updates artifacts without deleting existing claims."
+    },
+    {
+      "name": "commit_validation",
+      "category": "workflow",
+      "priority": 0,
+      "status": "done",
+      "description": "Validation layer that reads .resdag/profile.json at commit time and enforces rules. Three levels per rule: 'off' (no check), 'warn' (print warning, commit proceeds), 'require' (print error, command fails unless --no-validate). Rules: hypothesis_parent (results must link to a hypothesis), claim_structure (claim text must contain template sections like Question/Finding/Implication), vocabulary (domain tags must be in vocabulary). Applied in the CLI layer — workflow Python API stays unconstrained. `lab note` is exempt from all validation (quick notes are always friction-free, except in strict mode where lab note is disabled). Without profile.json, all validation is off (backward compatible).",
+      "test_file": "packages/reslab/tests/test_validation.py",
+      "acceptance": "With profile validation hypothesis_parent=warn: `lab execute` without --hypothesis prints warning but commits. With hypothesis_parent=require: `lab execute` without --hypothesis fails with error message suggesting `lab hypothesize` first. `--no-validate` overrides require-level rules. `lab note` never triggers validation warnings. Without profile.json, all commands work as before (no validation). Validation messages include actionable suggestions (exact commands to fix the issue)."
+    },
+    {
+      "name": "claim_templates_renderer",
+      "category": "visualization",
+      "priority": 0,
+      "status": "done",
+      "description": "Site renderer parses claim text with template sections (Question/Finding/Implication/Details) and displays them as structured cards. Card list view shows only the Finding line (or first sentence for unstructured claims). Detail page shows all sections with visual hierarchy. Render-time heuristics for existing unstructured claims provide immediate value without DAG mutations: (1) title extraction from '[Session N] ...' prefix or first sentence, (2) implicit thread inference by walking linear chains and grouping by domain overlap — displayed as thread navigation even without hypothesis nodes, (3) DAG health badge on site index showing branch ratio, hypothesis coverage, orphan rate. These heuristics make existing stores look better the moment a vocabulary and profile exist, without requiring /retrofit. Backward compatible: unstructured claims render correctly, heuristics degrade gracefully.",
+      "test_file": "packages/reslab/tests/test_structured_renderer.py",
+      "acceptance": "Claim with 'Question: ...\\nFinding: ...\\nImplication: ...\\nDetails: ...' renders as structured card with sections. Card list shows Finding as primary text. Existing unstructured claims: '[Session N]' prefix extracted as title, remainder as body. Implicit threads inferred from linear chains, shown as thread groupings in sidebar or navigation. DAG health badge rendered on index page. Mixed store (structured + unstructured) renders correctly."
+    },
+    {
+      "name": "vocabulary_hierarchy",
+      "category": "workflow",
+      "priority": 0,
+      "status": "done",
+      "description": "Distinguish synonyms from hierarchical subtags in the vocabulary. Current vocabulary treats all aliases identically — 'finetuning' → 'training' (correct, true synonym) and 'pantograph' → 'lean' (incorrect, pantograph is a subtopic not a synonym). New vocabulary config: `aliases` for true synonyms (original disappears), `subtags` for hierarchy (original preserved, parent added). Filter bar shows canonical tags as primary; subtags visible when filtering. Claim detail pages show original stored tags when they differ from normalized. `lab vocab analyze` reports normalization without modifying store. Backward compatible — existing vocabulary.json with only `aliases` works as before.",
+      "test_file": "packages/reslab/tests/test_vocabulary.py",
+      "acceptance": "Vocabulary config has `aliases` and `subtags`. `lab hypothesize --domain pantograph` stores ['lean', 'pantograph']. `lab hypothesize --domain finetuning` stores ['training']. `lab vocab analyze` reports per-claim diff without modifying store. Backward compatible with alias-only vocabulary."
+    },
+    {
+      "name": "multi_select_filters",
+      "category": "visualization",
+      "priority": 0,
+      "status": "done",
+      "description": "Domain filter supports multi-select with AND semantics. Clicking 'lean' then 'verification' shows only claims with BOTH tags. Active filters shown as removable chips. Counter updates. Type filter remains single-select, composes with domain filters via AND.",
+      "test_file": "packages/reslab/tests/test_site.py",
+      "acceptance": "Clicking two domain filters shows only claims matching both. Active filters as removable chips. Counter reflects filtered count. Single filter still works. Type + domain compose via AND."
+    },
+    {
+      "name": "timeline_graph",
+      "category": "visualization",
+      "priority": 0,
+      "status": "not_started",
+      "description": "Replace force-directed D3 graph with deterministic timeline layout. X-axis = time, Y-axis = domain cluster. Node positions computed from timestamp + domain, not simulation. Zoom/pan. Tooltip shows claim title. Click navigates to detail page. Orphans in separate lane.",
+      "test_file": "packages/reslab/tests/test_timeline_graph.py",
+      "acceptance": "Nodes positioned by date (x) and domain (y). Deterministic layout. Zoom/pan work. 70+ claims render without overlap. Orphans in distinct lane."
+    },
+    {
+      "name": "typed_edges",
+      "category": "visualization",
+      "priority": 1,
+      "status": "not_started",
+      "description": "Graph edges visually differentiated by relationship type inferred from child claim type. hypothesis→parent blue dashed, result→parent gray solid, replication→parent green, refutation→parent red dashed, equivalence purple dotted. Legend in graph area.",
+      "test_file": "packages/reslab/tests/test_typed_edges.py",
+      "acceptance": "Edges have distinct colors/styles per type. Legend shows all types. Works with timeline_graph layout."
+    },
+    {
+      "name": "claim_slash_command",
+      "category": "workflow",
+      "priority": 0,
+      "status": "done",
+      "description": "The /claim slash command for Claude Code integration, generated by `lab init` in disciplined and strict modes. When invoked, it: reads profile.json for audience and validation rules, reads templates/ for claim structure, reads vocabulary.json for domain tags, determines what was accomplished in the session, checks whether a hypothesis exists for this work (generates one if not), structures the result using the template, suggests parent links from existing claims, shows proposed claims for user confirmation, commits via lab commands, offers to interpret and branch. This is the primary authoring interface — it makes the structured hypothesis-first path easier than raw lab execute. Depends on: project_profiles, commit_validation, claim_templates_renderer, parent_suggestion.",
+      "test_file": "packages/reslab/tests/test_slash_command.py",
+      "acceptance": "Generated .claude/commands/claim.md contains complete prompt for hypothesis-first workflow. Agent using /claim produces: a hypothesis claim (if none exists), a result claim with template structure linked to hypothesis, and optionally an interpretation + branch. Claims are structured, use canonical vocabulary, and have parent links. The slash command prompt references profile.json audience and templates."
+    },
+    {
+      "name": "retrofit_slash_command",
+      "category": "workflow",
+      "priority": 0,
+      "status": "done",
+      "description": "The /retrofit slash command for restructuring existing stores via Claude Code. Generated by `lab init` in disciplined and strict modes. When invoked, the agent: (1) reads all claims in the store, (2) identifies implicit hypotheses by finding chain starts and topic transitions in linear runs, (3) proposes hypothesis claims to insert at branch points with template structure (Prediction/Rationale/If wrong), (4) proposes restructured versions of existing claims using the result template (Question/Finding/Implication/Details) written for the audience specified in profile.json, (5) identifies orphans and suggests parent links based on content similarity, (6) presents the full retrofit plan with DAG health before/after metrics, (7) on user approval, commits: new hypothesis claims, new structured claims that supersede originals, supersession refutations, and parent links. The agent does the LLM work (rewriting claims, inferring hypotheses); reslab provides the framework (templates, vocabulary, profile, commit commands). /retrofit is idempotent — running it again on a partially retrofitted store only proposes changes for remaining unstructured claims. Companion to /claim (which handles future commits).",
+      "test_file": "packages/reslab/tests/test_retrofit_command.py",
+      "acceptance": "Generated .claude/commands/retrofit.md contains complete prompt for store analysis and restructuring. Agent using /retrofit on a store with 74 unstructured claims proposes: hypothesis insertions, claim restructurings with template sections, orphan parent links. Plan shows before/after DAG health metrics. After apply: new hypothesis claims exist in store, restructured claims supersede originals, orphans have parent links. Re-running /retrofit on a fully retrofitted store reports 'nothing to do'. Partial retrofit (some claims already structured) only proposes changes for remaining unstructured claims."
+    },
+    {
+      "name": "vocab_bootstrap",
+      "category": "workflow",
+      "priority": 2,
+      "status": "not_started",
+      "description": "`lab vocab init` analyzes existing tags and proposes vocabulary. `lab vocab show` displays vocabulary with usage counts. `lab vocab analyze` reports normalization diff without modifying store.",
+      "test_file": "packages/reslab/tests/test_vocabulary.py",
+      "acceptance": "`lab vocab init` proposes vocabulary from existing tags. `lab vocab show` lists tags with counts. `lab vocab analyze` reports per-claim diff. Empty store gets minimal default."
+    },
+    {
+      "name": "parent_suggestion",
+      "category": "workflow",
+      "priority": 0,
+      "status": "done",
+      "description": "At commit time, suggest parent links via TF-IDF cosine similarity over claim text. Top-3 candidates with scores. --suggest-parents flag on lab commands. Optional embedding upgrade via sentence-transformers. Promoted to P1: not just commit convenience — this is how the research loop connects findings across threads. 'This grokking failure relates to that capacity result from 3 weeks ago' drives research direction.",
+      "test_file": "packages/reslab/tests/test_parent_suggestion.py",
+      "acceptance": "--suggest-parents prints top-3 ranked claims. Suggestions are relevant. Zero external deps (TF-IDF from stdlib). Embedding upgrade when sentence-transformers available."
+    },
+    {
+      "name": "research_threads",
+      "category": "workflow",
+      "priority": 0,
+      "status": "done",
+      "description": "Hypothesis + all descendants = navigable research thread. `lab threads` lists threads with status (open/confirmed/refuted/mixed). Site renders /threads/ index and per-thread pages. Promoted to P1: not just visualization — this is the agent's query interface for 'what's still open?' An autonomous research loop needs to know which hypotheses are unresolved, which threads are productive, which were abandoned and why. `lab threads --open` returns actionable frontier for the next experiment.",
+      "test_file": "packages/reslab/tests/test_threads.py",
+      "acceptance": "`lab threads` lists threads with status and count. `lab threads --open` returns only unresolved hypotheses. Site /threads/ renders thread pages. Status reflects descendant types. Multi-ancestor results appear in multiple threads."
+    },
+    {
+      "name": "dag_health",
+      "category": "workflow",
+      "priority": 0,
+      "status": "done",
+      "description": "`lab audit` reports structural quality of the DAG: branch ratio, hypothesis coverage, orphan rate, linear run length, type distribution, refutation patterns. Promoted to P1: not a dashboard — this is the agent's self-assessment. 'Am I stuck in a linear rut? Have I been refuted 3 times on the same approach? Is this thread productive?' Site renders a health badge. `lab audit --json` returns machine-readable output for the research loop to consume.",
+      "test_file": "packages/reslab/tests/test_audit.py",
+      "acceptance": "`lab audit` prints branch ratio, hypothesis coverage, orphan rate, max linear run, type distribution. Flags degenerate patterns. `lab audit --json` returns structured output. Site index shows health badge. Works on empty store."
+    },
+    {
+      "name": "research_loop",
+      "category": "workflow",
+      "priority": 0,
+      "status": "done",
+      "description": "The /research slash command that closes the autonomous research cycle. Generated by `lab init` in disciplined and strict modes. When invoked: (1) reads the full DAG via `lab threads --open` and `lab audit --json`, (2) identifies the frontier: open hypotheses, patterns in refutations, untested predictions from prior implications, threads that stalled, (3) proposes the next experiment with rationale grounded in the DAG ('Thread X was refuted at step Y, but the refutation suggests Z — test Z'), (4) on human approval, runs the experiment using project infrastructure (cloud GPU, Lean verification, whatever the project uses), (5) commits structured results via /claim, (6) assesses: continue this thread, branch to a new hypothesis, or abandon and explain why, (7) proposes the next cycle. Initially requires human approval at step 4. Guard rails: verification budget, scope limits, max depth per thread. The research loop connects experiment infrastructure with research memory and planning substrate.",
+      "test_file": "packages/reslab/tests/test_research_loop.py",
+      "acceptance": "Generated .claude/commands/research.md contains complete prompt for autonomous research cycle. Agent using /research reads DAG state, identifies frontier, proposes next experiment with rationale citing specific prior claims. Experiment proposal references open threads and refutation patterns. After human approval and experiment completion, results committed via /claim with proper hypothesis linkage. Agent proposes next cycle with continue/branch/abandon recommendation. Guard rails enforced: refuses to exceed verification budget, flags when thread depth exceeds limit."
+    },
+    {
+      "name": "hypothesis_quality_scoring",
+      "category": "workflow",
+      "priority": 0,
+      "status": "done",
+      "description": "Score hypothesis quality before allowing execution. A hypothesis like 'I predict this will work because it seems reasonable' is worthless. 'I predict d>0.5 because CKA shows 4x population-level structure, and JEPA on computation-paired data achieved d=0.478 in Session 74' is testable and falsifiable. `lab score <cid>` evaluates a hypothesis on: specificity (quantitative prediction present?), falsifiability (clear failure condition?), grounding (references prior results?), novelty (not already tested?). Returns a quality grade (A-F) with actionable feedback. In disciplined/strict modes, `lab execute` checks hypothesis quality first — warns (disciplined) or blocks (strict) if below threshold. `lab hypothesize` prints score immediately after commit so the user can revise before executing.",
+      "test_file": "packages/reslab/tests/test_hypothesis_scoring.py",
+      "acceptance": "`lab score <cid>` returns quality grade with breakdown. Hypothesis with quantitative prediction + grounding in prior results scores A/B. Vague hypothesis with no prediction scores D/F. `lab execute` in strict mode blocks on F-grade hypothesis. `lab hypothesize` prints score after commit. Score criteria configurable in profile.json."
+    },
+    {
+      "name": "contradiction_detection",
+      "category": "workflow",
+      "priority": 1,
+      "status": "done",
+      "description": "Detect when a new result contradicts an existing claim in the DAG. At commit time, scan existing claims for semantic conflicts with the new claim. Uses TF-IDF similarity (same engine as parent suggestion) to find related claims, then applies heuristic contradiction signals: negation patterns, opposing quantitative results, explicit refutation language. `lab contradictions` scans the full DAG for unresolved contradictions. `lab contradictions --for <cid>` checks a specific claim. Surfaced contradictions suggest creating an explicit refutation or equivalence claim to resolve the conflict. In disciplined/strict modes, contradictions trigger a warning at commit time prompting the user to acknowledge or resolve.",
+      "test_file": "packages/reslab/tests/test_contradictions.py",
+      "acceptance": "Committing 'X increases Y' when 'X decreases Y' exists flags a contradiction with the conflicting claim CID. `lab contradictions` lists all unresolved contradiction pairs. `lab contradictions --for <cid>` checks one claim. Contradictions include similarity score and conflict signal. Disciplined mode warns at commit time. Strict mode requires --acknowledge flag to proceed."
+    },
+    {
+      "name": "cost_aware_selection",
+      "category": "workflow",
+      "priority": 1,
+      "status": "done",
+      "description": "Before running an experiment, estimate compute cost and expected information gain. `lab cost <hypothesis-cid>` estimates cost from experiment metadata (cloud GPU hours, API calls, data size) and information gain from hypothesis quality score + thread context (how many results already exist on this thread, diminishing returns). Returns a cost/benefit ratio. `lab execute` prints cost estimate before proceeding. `lab audit` includes cost-per-insight metrics over time. Track actual costs by storing cost metadata in result claim trailers (cost_seconds, cost_usd). `lab audit --costs` shows spend by thread and domain. Addresses feedback: 'A 30-minute GPU job to test a well-formed hypothesis is worth it. A 4-hour job to test a vague hunch isn't.'",
+      "test_file": "packages/reslab/tests/test_cost_tracking.py",
+      "acceptance": "`lab cost <cid>` prints estimated cost and information gain ratio. `lab execute` shows cost estimate before proceeding. Result claims can include cost trailers (cost_seconds, cost_usd). `lab audit --costs` shows total spend, cost per thread, cost per domain. Cost tracking works without estimates (just tracks actuals if provided)."
+    },
+    {
+      "name": "embedding_search",
+      "category": "discovery",
+      "priority": 3,
+      "status": "not_started",
+      "description": "Optional: embed claims via sentence-transformers for similarity search. For large DAGs (1000+) or non-LLM workflows. Install via `pip install resdag[discover]`.",
+      "test_file": "tests/test_search.py",
+      "acceptance": "`res search 'grokking threshold'` returns ranked claims. Only available with sentence-transformers installed."
+    }
+  ]
+}
