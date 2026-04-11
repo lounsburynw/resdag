@@ -358,22 +358,47 @@ def lineage_cmd(ctx, cid):
     dag = DAG(store)
     children_map = dag._children_map()
 
-    # Collect ancestors as rows: (depth, cid) — roots at depth 0
-    def _collect_ancestors(c, visited=None):
-        if visited is None:
-            visited = set()
-        if c in visited:
-            return []
-        visited.add(c)
-        claim = store.get(c)
-        if not claim.parents:
-            return [(0, c)]
-        rows = []
-        for p in claim.parents:
-            rows.extend(_collect_ancestors(p, visited))
-        max_parent_depth = max(d for d, _ in rows)
-        rows.append((max_parent_depth + 1, c))
-        return rows
+    # Collect ancestors as rows: (depth, cid) — roots at depth 0.
+    # Iterative to avoid Python's recursion limit on deep chains, and to
+    # correctly handle diamond DAGs where a parent is reachable via multiple
+    # paths (the previous recursive version raised ValueError on diamonds
+    # because already-visited parents returned [], leaving max() empty).
+    def _collect_ancestors(focal):
+        # Phase 1: BFS the closure of focal + transitive parents, caching
+        # parent lists so we hit storage at most once per node.
+        parents_of: dict[str, list[str]] = {}
+        work = [focal]
+        while work:
+            c = work.pop()
+            if c in parents_of:
+                continue
+            parents_of[c] = list(store.get(c).parents)
+            for p in parents_of[c]:
+                if p not in parents_of:
+                    work.append(p)
+
+        # Phase 2: Compute depth (longest path from a root) via iterative
+        # post-order DFS. The (node, ready) marker pattern processes a node
+        # only after all its parents have been resolved.
+        depth: dict[str, int] = {}
+        for start in parents_of:
+            if start in depth:
+                continue
+            stack: list[tuple[str, bool]] = [(start, False)]
+            while stack:
+                node, ready = stack.pop()
+                if ready:
+                    parent_depths = [depth[p] for p in parents_of[node] if p in depth]
+                    depth[node] = (max(parent_depths) + 1) if parent_depths else 0
+                    continue
+                if node in depth:
+                    continue
+                stack.append((node, True))
+                for p in parents_of[node]:
+                    if p not in depth:
+                        stack.append((p, False))
+
+        return sorted(((depth[c], c) for c in parents_of), key=lambda r: (r[0], r[1]))
 
     ancestor_rows = _collect_ancestors(matched)
     focal_depth = 0

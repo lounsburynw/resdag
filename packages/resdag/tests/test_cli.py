@@ -502,6 +502,78 @@ def test_lineage_nonexistent_cid_fails(tmp_path):
     assert "No claim found" in result.output
 
 
+def test_lineage_handles_diamond_dag(tmp_path):
+    """Diamond DAG: focal D has parents B and C, both of which share parent A.
+
+    Regression test for a bug where _collect_ancestors raised
+    ``ValueError: max() arg is an empty sequence`` because the second visit
+    to A returned [] and left rows empty when computing max parent depth.
+    """
+    import os
+    runner = CliRunner()
+    os.chdir(tmp_path)
+    runner.invoke(main, ["init"])
+
+    a_short = runner.invoke(main, [
+        "commit", "-c", "A root", "-t", "result",
+    ]).output.strip().split("]")[0].lstrip("[")
+    b_short = runner.invoke(main, [
+        "commit", "-c", "B child", "-t", "result", "-p", a_short,
+    ]).output.strip().split("]")[0].lstrip("[")
+    c_short = runner.invoke(main, [
+        "commit", "-c", "C child", "-t", "result", "-p", a_short,
+    ]).output.strip().split("]")[0].lstrip("[")
+    d_short = runner.invoke(main, [
+        "commit", "-c", "D merge", "-t", "result", "-p", b_short, "-p", c_short,
+    ]).output.strip().split("]")[0].lstrip("[")
+
+    result = runner.invoke(main, ["lineage", d_short])
+    assert result.exit_code == 0, result.output
+    assert "A root" in result.output
+    assert "B child" in result.output
+    assert "C child" in result.output
+    assert "D merge" in result.output
+    # A appears exactly once even though both B and C reach it.
+    assert result.output.count("A root") == 1
+
+
+def test_lineage_handles_deep_chain(tmp_path):
+    """Deep chain longer than Python's recursion limit must not crash.
+
+    Regression test for a RecursionError in _collect_ancestors. We build a
+    chain of 1200 claims via the storage API (much faster than going through
+    Click for each commit), which exceeds Python's default recursion limit
+    of 1000, so the previous recursive implementation would crash.
+    """
+    import os
+    from resdag.claim import Claim, ClaimType
+    from resdag.storage.local import LocalStore
+
+    runner = CliRunner()
+    os.chdir(tmp_path)
+    runner.invoke(main, ["init"])
+
+    store = LocalStore(tmp_path / ".resdag")
+    chain_len = 1200
+    prev: tuple[str, ...] = ()
+    last_cid = ""
+    for i in range(chain_len):
+        claim = Claim(
+            claim=f"claim {i}",
+            type=ClaimType.RESULT,
+            parents=prev,
+            timestamp="2026-01-01T00:00:00Z",
+        )
+        last_cid = store.put(claim)
+        prev = (last_cid,)
+
+    result = runner.invoke(main, ["lineage", last_cid])
+    assert result.exit_code == 0, (result.exception, result.output)
+    # 1200 claims printed (1199 ancestors + focal).
+    lines = [l for l in result.output.strip().splitlines() if l.strip()]
+    assert len(lines) == chain_len
+
+
 # --- Orphan and unverified filter tests ---
 
 
