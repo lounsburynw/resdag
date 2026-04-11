@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import click
@@ -33,6 +34,27 @@ _MEDIA_TYPES = {
     ".jpeg": "image/jpeg",
     ".pdf": "application/pdf",
 }
+
+
+def _resolve_claim_text(claim_text: str | None, claim_file: str | None) -> str:
+    """Resolve claim text from argument/option or --claim-file.
+
+    Accepts a file path or ``-`` for stdin.  Bypasses shell expansion
+    issues (e.g. zsh command-substituting backticks in ``-c "..."``).
+    """
+    # When both are given, -f wins (needed for commands with required
+    # positional args where the user must pass a placeholder).
+    if claim_file:
+        if claim_file == "-":
+            text = sys.stdin.read().strip()
+        else:
+            text = Path(claim_file).read_text(encoding="utf-8").strip()
+        if not text:
+            raise click.UsageError("Claim file is empty.")
+        return text
+    if claim_text:
+        return claim_text
+    raise click.UsageError("Provide claim text (-c) or --claim-file/-f <path> (use - for stdin).")
 
 
 def _guess_media_type(filename: str) -> str:
@@ -101,7 +123,9 @@ def guide_cmd():
 
 
 @main.command("commit")
-@click.option("--claim", "-c", "claim_text", required=True, help="The claim text.")
+@click.option("--claim", "-c", "claim_text", default=None, help="The claim text.")
+@click.option("--claim-file", "-f", "claim_file", default=None,
+              help="Read claim text from file (use - for stdin).")
 @click.option(
     "--type", "-t", "claim_type",
     required=True,
@@ -115,8 +139,9 @@ def guide_cmd():
               type=click.Path(exists=True), help="Evidence file(s) to attach.")
 @click.option("--timestamp", "-T", default=None, help="ISO 8601 timestamp (default: now).")
 @click.pass_context
-def commit_cmd(ctx, claim_text, claim_type, parents, domains, author, evidence_files, timestamp):
+def commit_cmd(ctx, claim_text, claim_file, claim_type, parents, domains, author, evidence_files, timestamp):
     """Create a new claim and add it to the DAG."""
+    claim_text = _resolve_claim_text(claim_text, claim_file)
     store = _get_store(ctx)
     dag = DAG(store)
 
@@ -159,15 +184,19 @@ def commit_cmd(ctx, claim_text, claim_type, parents, domains, author, evidence_f
 
 
 @main.command("note")
-@click.argument("claim_text")
+@click.argument("claim_text", required=False, default=None)
+@click.option("--claim-file", "-f", "claim_file", default=None,
+              help="Read claim text from file (use - for stdin).")
 @click.option("--domain", "-d", "domains", multiple=True, help="Domain tag(s).")
 @click.option("--parent", "-p", "parents", multiple=True, help="Parent CID(s).")
 @click.pass_context
-def note_cmd(ctx, claim_text, domains, parents):
+def note_cmd(ctx, claim_text, claim_file, domains, parents):
     """Quick-commit a result claim with minimal ceremony."""
+    claim_text = _resolve_claim_text(claim_text, claim_file)
     ctx.invoke(
         commit_cmd,
         claim_text=claim_text,
+        claim_file=None,
         claim_type="result",
         parents=parents,
         domains=domains,

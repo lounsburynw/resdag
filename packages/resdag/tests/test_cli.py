@@ -673,6 +673,74 @@ def test_note_with_domain_and_parent(tmp_path):
     assert "result" in result.output
 
 
+# --- Claim-file tests (--claim-file / -f) ---
+
+
+def test_commit_from_file(tmp_path):
+    runner = CliRunner()
+    os.chdir(tmp_path)
+    runner.invoke(main, ["init"])
+    (tmp_path / "claim.txt").write_text("Backticks `like this` survive")
+    result = runner.invoke(main, [
+        "commit", "-f", "claim.txt", "-t", "result",
+    ])
+    assert result.exit_code == 0
+    assert "Backticks `like this` survive" in result.output
+
+
+def test_commit_from_stdin(tmp_path):
+    runner = CliRunner()
+    os.chdir(tmp_path)
+    runner.invoke(main, ["init"])
+    result = runner.invoke(main, [
+        "commit", "-f", "-", "-t", "result",
+    ], input="Piped claim text\n")
+    assert result.exit_code == 0
+    assert "Piped claim text" in result.output
+
+
+def test_note_from_file(tmp_path):
+    runner = CliRunner()
+    os.chdir(tmp_path)
+    runner.invoke(main, ["init"])
+    (tmp_path / "note.txt").write_text("Note with `code`")
+    result = runner.invoke(main, ["note", "-f", "note.txt"])
+    assert result.exit_code == 0
+    assert "Note with `code`" in result.output
+
+
+def test_commit_no_claim_no_file_fails(tmp_path):
+    runner = CliRunner()
+    os.chdir(tmp_path)
+    runner.invoke(main, ["init"])
+    result = runner.invoke(main, ["commit", "-t", "result"])
+    assert result.exit_code != 0
+
+
+def test_commit_empty_file_fails(tmp_path):
+    runner = CliRunner()
+    os.chdir(tmp_path)
+    runner.invoke(main, ["init"])
+    (tmp_path / "empty.txt").write_text("   \n  ")
+    result = runner.invoke(main, [
+        "commit", "-f", "empty.txt", "-t", "result",
+    ])
+    assert result.exit_code != 0
+
+
+def test_commit_file_overrides_positional(tmp_path):
+    """When -f is given alongside -c, file content wins."""
+    runner = CliRunner()
+    os.chdir(tmp_path)
+    runner.invoke(main, ["init"])
+    (tmp_path / "real.txt").write_text("From file")
+    result = runner.invoke(main, [
+        "commit", "-c", "placeholder", "-f", "real.txt", "-t", "result",
+    ])
+    assert result.exit_code == 0
+    assert "From file" in result.output
+
+
 # --- Ingest tests ---
 
 

@@ -19,6 +19,17 @@ from resdag.storage.local import LocalStore
 from reslab.git_binding import GitSnapshot, capture
 
 
+def _dedupe(items: Sequence[str]) -> list[str]:
+    """Deduplicate while preserving first-seen order."""
+    seen: set[str] = set()
+    out: list[str] = []
+    for item in items:
+        if item and item not in seen:
+            out.append(item)
+            seen.add(item)
+    return out
+
+
 def _make_claim(
     claim_text: str,
     claim_type: ClaimType,
@@ -63,7 +74,7 @@ def hypothesize(
 ) -> str:
     """Declare a hypothesis. Returns CID."""
     git = capture(repo_path)
-    obj = _make_claim(claim, ClaimType.HYPOTHESIS, parents=parents, domains=domains, git=git)
+    obj = _make_claim(claim, ClaimType.HYPOTHESIS, parents=_dedupe(parents), domains=domains, git=git)
     return store.put(obj)
 
 
@@ -73,6 +84,7 @@ def execute(
     *,
     evidence_paths: Sequence[str | Path] = (),
     hypothesis_cid: str = "",
+    extra_parents: Sequence[str] = (),
     domains: Sequence[str] = (),
     command: str = "",
     repo_path: str = ".",
@@ -88,7 +100,7 @@ def execute(
         cid = store.put_evidence(data, filename=p.name)
         evidence_cids.append(cid)
 
-    parents = [hypothesis_cid] if hypothesis_cid else []
+    parents = _dedupe([hypothesis_cid, *extra_parents])
 
     obj = _make_claim(
         claim,
@@ -109,13 +121,15 @@ def interpret(
     *,
     result_cid: str,
     confirmed: bool,
+    extra_parents: Sequence[str] = (),
     domains: Sequence[str] = (),
     repo_path: str = ".",
 ) -> str:
     """Interpret a result as confirmation or refutation. Returns CID."""
     git = capture(repo_path)
     claim_type = ClaimType.REPLICATION if confirmed else ClaimType.REFUTATION
-    obj = _make_claim(claim, claim_type, parents=[result_cid], domains=domains, git=git)
+    parents = _dedupe([result_cid, *extra_parents])
+    obj = _make_claim(claim, claim_type, parents=parents, domains=domains, git=git)
     return store.put(obj)
 
 
@@ -124,12 +138,14 @@ def branch(
     claim: str,
     *,
     parent_cid: str,
+    extra_parents: Sequence[str] = (),
     domains: Sequence[str] = (),
     repo_path: str = ".",
 ) -> str:
     """Fork research direction — new hypothesis branching from an interpretation. Returns CID."""
     git = capture(repo_path)
-    obj = _make_claim(claim, ClaimType.HYPOTHESIS, parents=[parent_cid], domains=domains, git=git)
+    parents = _dedupe([parent_cid, *extra_parents])
+    obj = _make_claim(claim, ClaimType.HYPOTHESIS, parents=parents, domains=domains, git=git)
     return store.put(obj)
 
 
@@ -138,6 +154,7 @@ def replicate(
     claim: str,
     *,
     original_cid: str,
+    extra_parents: Sequence[str] = (),
     evidence_paths: Sequence[str | Path] = (),
     domains: Sequence[str] = (),
     command: str = "",
@@ -153,10 +170,11 @@ def replicate(
         cid = store.put_evidence(data, filename=p.name)
         evidence_cids.append(cid)
 
+    parents = _dedupe([original_cid, *extra_parents])
     obj = _make_claim(
         claim,
         ClaimType.REPLICATION,
-        parents=[original_cid],
+        parents=parents,
         evidence=evidence_cids,
         domains=domains,
         git=git,

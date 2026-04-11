@@ -68,6 +68,21 @@ def _make_vocab() -> Vocabulary:
     return default_vocabulary()
 
 
+def _extract_cid(output: str) -> str:
+    """Extract the committed CID from CLI output.
+
+    Output may contain validation warnings/errors before the success line
+    (e.g. ``result <cid>  <claim>``), so split()[1] on the whole output is
+    unreliable.  This helper finds the success line by prefix.
+    """
+    prefixes = ("hypothesis", "result", "replication", "refutation")
+    for line in output.splitlines():
+        parts = line.split()
+        if len(parts) >= 2 and parts[0] in prefixes:
+            return parts[1]
+    raise ValueError(f"No CID found in output: {output!r}")
+
+
 # ---------------------------------------------------------------------------
 # Unit tests: validate_commit
 # ---------------------------------------------------------------------------
@@ -314,7 +329,7 @@ class TestExecuteValidation:
              "--repo", str(project_root)],
         )
         assert h_result.exit_code == 0
-        hyp_cid = h_result.output.split()[1]
+        hyp_cid = _extract_cid(h_result.output)
 
         # Execute with hypothesis + structured text
         text = "Question: Does X? Finding: Yes. Implication: Good."
@@ -436,10 +451,20 @@ class TestActionableSuggestions:
         save_vocabulary(_make_vocab(), store_path)
 
         runner = CliRunner()
+        # Create a real hypothesis to attach to (its CID must resolve)
+        h = runner.invoke(
+            main,
+            ["--root", str(store_path), "hypothesize",
+             "Prediction: P. Rationale: R. If wrong: W.",
+             "-d", "training", "--no-validate",
+             "--repo", str(project_root)],
+        )
+        hyp_cid = _extract_cid(h.output)
+
         result = runner.invoke(
             main,
             ["--root", str(store_path), "execute", "plain result",
-             "--hypothesis", "fake", "--no-validate",
+             "--hypothesis", hyp_cid, "--no-validate",
              "--repo", str(project_root)],
             catch_exceptions=False,
         )
@@ -452,10 +477,20 @@ class TestActionableSuggestions:
         save_vocabulary(_make_vocab(), store_path)
 
         runner = CliRunner()
+        # Create a real hypothesis to attach to (its CID must resolve)
+        h = runner.invoke(
+            main,
+            ["--root", str(store_path), "hypothesize",
+             "Prediction: P. Rationale: R. If wrong: W.",
+             "-d", "training", "--no-validate",
+             "--repo", str(project_root)],
+        )
+        hyp_cid = _extract_cid(h.output)
+
         result = runner.invoke(
             main,
             ["--root", str(store_path), "execute", "plain result",
-             "--hypothesis", "fake", "-d", "unknowntag", "--no-validate",
+             "--hypothesis", hyp_cid, "-d", "unknowntag", "--no-validate",
              "--repo", str(project_root)],
             catch_exceptions=False,
         )
@@ -475,7 +510,7 @@ class TestOtherCommandsValidation:
             ["--root", str(store_path), "hypothesize", "h", "--no-validate",
              "--repo", str(project_root)],
         )
-        parent_cid = h.output.split()[1]
+        parent_cid = _extract_cid(h.output)
 
         # Branch with unstructured text should get a warning
         result = runner.invoke(
@@ -498,7 +533,7 @@ class TestOtherCommandsValidation:
             ["--root", str(store_path), "execute", "original", "--no-validate",
              "--repo", str(project_root)],
         )
-        original_cid = r.output.split()[1]
+        original_cid = _extract_cid(r.output)
 
         result = runner.invoke(
             main,

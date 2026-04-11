@@ -190,3 +190,125 @@ def test_full_workflow_chain(store_and_repo: tuple[LocalStore, Path]) -> None:
     assert h1 in store.get(r1).parents
     assert r1 in store.get(i1).parents
     assert i1 in store.get(h2).parents
+
+
+# ---------------------------------------------------------------------------
+# extra_parents support (secondary parent links)
+# ---------------------------------------------------------------------------
+
+
+def test_execute_with_extra_parents(store_and_repo: tuple[LocalStore, Path]) -> None:
+    """execute should combine hypothesis_cid and extra_parents into parents."""
+    store, repo = store_and_repo
+
+    h = workflow.hypothesize(store, "primary hypothesis", repo_path=str(repo))
+    related = workflow.hypothesize(store, "related context", repo_path=str(repo))
+
+    result = workflow.execute(
+        store,
+        "finding",
+        hypothesis_cid=h,
+        extra_parents=[related],
+        repo_path=str(repo),
+    )
+
+    claim = store.get(result)
+    assert h in claim.parents
+    assert related in claim.parents
+    assert len(claim.parents) == 2
+
+
+def test_execute_extra_parents_without_hypothesis(
+    store_and_repo: tuple[LocalStore, Path],
+) -> None:
+    """execute should support parents even without a hypothesis (orphan-fix case)."""
+    store, repo = store_and_repo
+
+    parent = workflow.hypothesize(store, "orphan's new home", repo_path=str(repo))
+
+    result = workflow.execute(
+        store,
+        "rehomed finding",
+        extra_parents=[parent],
+        repo_path=str(repo),
+    )
+
+    claim = store.get(result)
+    assert claim.parents == (parent,)
+
+
+def test_interpret_with_extra_parents(store_and_repo: tuple[LocalStore, Path]) -> None:
+    store, repo = store_and_repo
+
+    h = workflow.hypothesize(store, "hyp", repo_path=str(repo))
+    r = workflow.execute(store, "res", hypothesis_cid=h, repo_path=str(repo))
+    other = workflow.hypothesize(store, "related", repo_path=str(repo))
+
+    i = workflow.interpret(
+        store,
+        "confirmed + related",
+        result_cid=r,
+        confirmed=True,
+        extra_parents=[other],
+        repo_path=str(repo),
+    )
+
+    claim = store.get(i)
+    assert r in claim.parents
+    assert other in claim.parents
+
+
+def test_branch_with_extra_parents(store_and_repo: tuple[LocalStore, Path]) -> None:
+    store, repo = store_and_repo
+
+    p = workflow.hypothesize(store, "root", repo_path=str(repo))
+    sibling = workflow.hypothesize(store, "sibling context", repo_path=str(repo))
+
+    h = workflow.branch(
+        store,
+        "new direction",
+        parent_cid=p,
+        extra_parents=[sibling],
+        repo_path=str(repo),
+    )
+
+    claim = store.get(h)
+    assert p in claim.parents
+    assert sibling in claim.parents
+
+
+def test_execute_dedupes_parents(store_and_repo: tuple[LocalStore, Path]) -> None:
+    """If hypothesis_cid == an extra_parent, parents should not contain duplicates."""
+    store, repo = store_and_repo
+
+    h = workflow.hypothesize(store, "shared", repo_path=str(repo))
+
+    result = workflow.execute(
+        store,
+        "finding",
+        hypothesis_cid=h,
+        extra_parents=[h, h],  # duplicate with hypothesis
+        repo_path=str(repo),
+    )
+
+    claim = store.get(result)
+    assert claim.parents == (h,)
+
+
+def test_replicate_with_extra_parents(store_and_repo: tuple[LocalStore, Path]) -> None:
+    store, repo = store_and_repo
+
+    original = workflow.execute(store, "original finding", repo_path=str(repo))
+    context = workflow.hypothesize(store, "replication context", repo_path=str(repo))
+
+    rep = workflow.replicate(
+        store,
+        "reproduced",
+        original_cid=original,
+        extra_parents=[context],
+        repo_path=str(repo),
+    )
+
+    claim = store.get(rep)
+    assert original in claim.parents
+    assert context in claim.parents

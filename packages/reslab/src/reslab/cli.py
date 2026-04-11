@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
+from typing import Sequence
 
 import click
 
@@ -36,6 +38,49 @@ from reslab.costs import (
     audit_costs,
     format_cost_trailer,
 )
+
+
+def _resolve_cid(store: LocalStore, prefix: str) -> str:
+    """Resolve a full or prefix CID to a full CID.
+
+    Raises click.UsageError on no match or ambiguous match.
+    """
+    if store.has(prefix):
+        return prefix
+    matches = [c for c in store.list_cids() if c.startswith(prefix)]
+    if len(matches) == 1:
+        return matches[0]
+    if len(matches) > 1:
+        raise click.UsageError(
+            f"Ambiguous CID prefix '{prefix}' — matches {len(matches)} claims."
+        )
+    raise click.UsageError(f"CID not found: {prefix}")
+
+
+def _resolve_cids(store: LocalStore, prefixes: Sequence[str]) -> tuple[str, ...]:
+    """Resolve a sequence of CID prefixes, raising on any failure."""
+    return tuple(_resolve_cid(store, p) for p in prefixes)
+
+
+def _resolve_claim_text(claim_text: str | None, claim_file: str | None) -> str:
+    """Resolve claim text from argument/option or --claim-file.
+
+    Accepts a file path or ``-`` for stdin.  Bypasses shell expansion
+    issues (e.g. zsh command-substituting backticks in ``-c "..."``).
+    """
+    # When both are given, -f wins (needed for commands with required
+    # positional args where the user must pass a placeholder).
+    if claim_file:
+        if claim_file == "-":
+            text = sys.stdin.read().strip()
+        else:
+            text = Path(claim_file).read_text(encoding="utf-8").strip()
+        if not text:
+            raise click.UsageError("Claim file is empty.")
+        return text
+    if claim_text:
+        return claim_text
+    raise click.UsageError("Provide claim text or use --claim-file/-f <path> (use - for stdin).")
 
 
 def _get_store(ctx: click.Context) -> LocalStore:
@@ -188,16 +233,20 @@ def config_set(ctx: click.Context, key: str, value: str) -> None:
 
 
 @main.command()
-@click.argument("claim")
+@click.argument("claim", required=False, default=None)
+@click.option("--claim-file", "-f", "claim_file", default=None,
+              help="Read claim text from file (use - for stdin).")
 @click.option("--domain", "-d", "domains", multiple=True, help="Domain tags.")
 @click.option("--parent", "-p", "parents", multiple=True, help="Parent CIDs.")
 @click.option("--suggest-parents", "do_suggest", is_flag=True, help="Show suggested parent claims.")
 @click.option("--no-validate", is_flag=True, help="Skip validation checks.")
 @click.option("--repo", default=".", help="Git repo path.")
 @click.pass_context
-def hypothesize(ctx: click.Context, claim: str, domains: tuple, parents: tuple, do_suggest: bool, no_validate: bool, repo: str) -> None:
+def hypothesize(ctx: click.Context, claim: str | None, claim_file: str | None, domains: tuple, parents: tuple, do_suggest: bool, no_validate: bool, repo: str) -> None:
     """Declare a hypothesis."""
+    claim = _resolve_claim_text(claim, claim_file)
     store = _get_store(ctx)
+    parents = _resolve_cids(store, parents)
     domains = _normalize_domains(store, domains)
     if do_suggest:
         suggestions = suggest_parents(store, claim, domains=domains)
@@ -216,9 +265,12 @@ def hypothesize(ctx: click.Context, claim: str, domains: tuple, parents: tuple, 
 
 
 @main.command()
-@click.argument("claim")
+@click.argument("claim", required=False, default=None)
+@click.option("--claim-file", "-f", "claim_file", default=None,
+              help="Read claim text from file (use - for stdin).")
 @click.option("--evidence", "-e", "evidence_paths", multiple=True, help="Evidence file paths.")
 @click.option("--hypothesis", "-h", "hypothesis_cid", default="", help="Parent hypothesis CID.")
+@click.option("--parent", "-p", "parents", multiple=True, help="Additional parent CID(s).")
 @click.option("--domain", "-d", "domains", multiple=True, help="Domain tags.")
 @click.option("--command", "-c", "command", default="", help="Command that produced this result.")
 @click.option("--cost-seconds", type=float, default=None, help="Experiment wall-clock time in seconds.")
@@ -229,9 +281,11 @@ def hypothesize(ctx: click.Context, claim: str, domains: tuple, parents: tuple, 
 @click.pass_context
 def execute(
     ctx: click.Context,
-    claim: str,
+    claim: str | None,
+    claim_file: str | None,
     evidence_paths: tuple,
     hypothesis_cid: str,
+    parents: tuple,
     domains: tuple,
     command: str,
     cost_seconds: float | None,
@@ -241,7 +295,11 @@ def execute(
     repo: str,
 ) -> None:
     """Record an experiment result."""
+    claim = _resolve_claim_text(claim, claim_file)
     store = _get_store(ctx)
+    if hypothesis_cid:
+        hypothesis_cid = _resolve_cid(store, hypothesis_cid)
+    extra_parents = _resolve_cids(store, parents)
     domains = _normalize_domains(store, domains)
     if do_suggest:
         suggestions = suggest_parents(store, claim, domains=domains)
@@ -262,6 +320,7 @@ def execute(
         claim,
         evidence_paths=evidence_paths,
         hypothesis_cid=hypothesis_cid,
+        extra_parents=extra_parents,
         domains=domains,
         command=command,
         repo_path=repo,
@@ -273,6 +332,9 @@ def execute(
 @main.command()
 @click.argument("claim")
 @click.argument("result_cid")
+@click.option("--claim-file", "-f", "claim_file", default=None,
+              help="Read claim text from file (use - for stdin). Overrides positional claim.")
+@click.option("--parent", "-p", "parents", multiple=True, help="Additional parent CID(s).")
 @click.option("--confirmed/--refuted", default=True, help="Was the hypothesis confirmed?")
 @click.option("--domain", "-d", "domains", multiple=True, help="Domain tags.")
 @click.option("--suggest-parents", "do_suggest", is_flag=True, help="Show suggested parent claims.")
@@ -283,6 +345,8 @@ def interpret(
     ctx: click.Context,
     claim: str,
     result_cid: str,
+    claim_file: str | None,
+    parents: tuple,
     confirmed: bool,
     domains: tuple,
     do_suggest: bool,
@@ -290,7 +354,10 @@ def interpret(
     repo: str,
 ) -> None:
     """Interpret a result as confirmation or refutation."""
+    claim = _resolve_claim_text(claim, claim_file)
     store = _get_store(ctx)
+    result_cid = _resolve_cid(store, result_cid)
+    extra_parents = _resolve_cids(store, parents)
     domains = _normalize_domains(store, domains)
     if do_suggest:
         suggestions = suggest_parents(store, claim, domains=domains)
@@ -300,7 +367,8 @@ def interpret(
         ctx.exit(1)
         return
     cid = workflow.interpret(
-        store, claim, result_cid=result_cid, confirmed=confirmed, domains=domains, repo_path=repo
+        store, claim, result_cid=result_cid, confirmed=confirmed,
+        extra_parents=extra_parents, domains=domains, repo_path=repo
     )
     label = "replication" if confirmed else "refutation"
     click.echo(f"{label} {cid[:12]}  {claim}")
@@ -309,14 +377,20 @@ def interpret(
 @main.command()
 @click.argument("claim")
 @click.argument("parent_cid")
+@click.option("--claim-file", "-f", "claim_file", default=None,
+              help="Read claim text from file (use - for stdin). Overrides positional claim.")
+@click.option("--parent", "-p", "parents", multiple=True, help="Additional parent CID(s).")
 @click.option("--domain", "-d", "domains", multiple=True, help="Domain tags.")
 @click.option("--suggest-parents", "do_suggest", is_flag=True, help="Show suggested parent claims.")
 @click.option("--no-validate", is_flag=True, help="Skip validation checks.")
 @click.option("--repo", default=".", help="Git repo path.")
 @click.pass_context
-def branch(ctx: click.Context, claim: str, parent_cid: str, domains: tuple, do_suggest: bool, no_validate: bool, repo: str) -> None:
+def branch(ctx: click.Context, claim: str, parent_cid: str, claim_file: str | None, parents: tuple, domains: tuple, do_suggest: bool, no_validate: bool, repo: str) -> None:
     """Fork research direction with a new hypothesis."""
+    claim = _resolve_claim_text(claim, claim_file)
     store = _get_store(ctx)
+    parent_cid = _resolve_cid(store, parent_cid)
+    extra_parents = _resolve_cids(store, parents)
     domains = _normalize_domains(store, domains)
     if do_suggest:
         suggestions = suggest_parents(store, claim, domains=domains)
@@ -324,13 +398,16 @@ def branch(ctx: click.Context, claim: str, parent_cid: str, domains: tuple, do_s
     if not _run_validation(store, ClaimType.HYPOTHESIS, claim, domains, "", no_validate):
         ctx.exit(1)
         return
-    cid = workflow.branch(store, claim, parent_cid=parent_cid, domains=domains, repo_path=repo)
+    cid = workflow.branch(store, claim, parent_cid=parent_cid, extra_parents=extra_parents, domains=domains, repo_path=repo)
     click.echo(f"hypothesis {cid[:12]}  {claim}")
 
 
 @main.command()
 @click.argument("claim")
 @click.argument("original_cid")
+@click.option("--claim-file", "-f", "claim_file", default=None,
+              help="Read claim text from file (use - for stdin). Overrides positional claim.")
+@click.option("--parent", "-p", "parents", multiple=True, help="Additional parent CID(s).")
 @click.option("--evidence", "-e", "evidence_paths", multiple=True, help="Evidence file paths.")
 @click.option("--domain", "-d", "domains", multiple=True, help="Domain tags.")
 @click.option("--command", "-c", "command", default="", help="Command that reproduced this.")
@@ -342,6 +419,8 @@ def replicate(
     ctx: click.Context,
     claim: str,
     original_cid: str,
+    claim_file: str | None,
+    parents: tuple,
     evidence_paths: tuple,
     domains: tuple,
     command: str,
@@ -350,7 +429,10 @@ def replicate(
     repo: str,
 ) -> None:
     """Record a replication attempt."""
+    claim = _resolve_claim_text(claim, claim_file)
     store = _get_store(ctx)
+    original_cid = _resolve_cid(store, original_cid)
+    extra_parents = _resolve_cids(store, parents)
     domains = _normalize_domains(store, domains)
     if do_suggest:
         suggestions = suggest_parents(store, claim, domains=domains)
@@ -362,6 +444,7 @@ def replicate(
         store,
         claim,
         original_cid=original_cid,
+        extra_parents=extra_parents,
         evidence_paths=evidence_paths,
         domains=domains,
         command=command,
@@ -371,13 +454,16 @@ def replicate(
 
 
 @main.command()
-@click.argument("claim")
+@click.argument("claim", required=False, default=None)
+@click.option("--claim-file", "-f", "claim_file", default=None,
+              help="Read claim text from file (use - for stdin).")
 @click.option("--domain", "-d", "domains", multiple=True, help="Domain tags.")
 @click.option("--suggest-parents", "do_suggest", is_flag=True, help="Show suggested parent claims.")
 @click.option("--repo", default=".", help="Git repo path.")
 @click.pass_context
-def note(ctx: click.Context, claim: str, domains: tuple, do_suggest: bool, repo: str) -> None:
+def note(ctx: click.Context, claim: str | None, claim_file: str | None, domains: tuple, do_suggest: bool, repo: str) -> None:
     """Quick note — no validation, no structure required."""
+    claim = _resolve_claim_text(claim, claim_file)
     store = _get_store(ctx)
 
     # Strict mode disables lab note entirely
