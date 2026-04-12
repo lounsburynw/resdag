@@ -294,8 +294,10 @@ def ingest_cmd(ctx, json_file, template, claim_type, domains, parents):
 @click.option("--orphans", is_flag=True, help="Show claims with no parents (likely missing parent links).")
 @click.option("--unverified", is_flag=True, help="Show claims with no verification receipts.")
 @click.option("--active", is_flag=True, help="Hide superseded claims.")
+@click.option("--sort", "sort_key", type=click.Choice(["date", "cid"]), default="date",
+              help="Sort order (default: date, newest first).")
 @click.pass_context
-def log_cmd(ctx, domains, claim_type, after, before, orphans, unverified, active):
+def log_cmd(ctx, domains, claim_type, after, before, orphans, unverified, active, sort_key):
     """List claims in the repository, with optional filters."""
     store = _get_store(ctx)
     cids = store.list_cids()
@@ -314,7 +316,8 @@ def log_cmd(ctx, domains, claim_type, after, before, orphans, unverified, active
     if active:
         superseded = _superseded_cids(store, children_map)
 
-    matched = False
+    # Collect matching (cid, claim) pairs, then sort
+    results = []
     for cid in cids:
         claim = store.get(cid)
         if claim_type and claim.type.value != claim_type:
@@ -336,10 +339,18 @@ def log_cmd(ctx, domains, claim_type, after, before, orphans, unverified, active
                 continue
         if active and cid in superseded:
             continue
-        click.echo(f"{_short_cid(cid)}  {claim.type.value:<12}  {claim.claim}")
-        matched = True
-    if not matched:
+        results.append((cid, claim))
+
+    if not results:
         click.echo("No claims match the filters.")
+        return
+
+    if sort_key == "date":
+        results.sort(key=lambda r: r[1].timestamp, reverse=True)
+    # sort_key == "cid" keeps the original CID-alphabetical order
+
+    for cid, claim in results:
+        click.echo(f"{_short_cid(cid)}  {claim.type.value:<12}  {claim.claim}")
 
 
 @main.command("lineage")
@@ -426,6 +437,29 @@ def lineage_cmd(ctx, cid):
             _print_descendants(child_cid, depth + 1, visited)
 
     _print_descendants(matched, focal_depth + 1)
+
+
+@main.command("children")
+@click.argument("cid")
+@click.pass_context
+def children_cmd(ctx, cid):
+    """List claims that have CID as a parent (direct children)."""
+    store = _get_store(ctx)
+
+    matched = _resolve_cid(store, cid)
+    if isinstance(matched, list):
+        ctx.fail(f"Ambiguous prefix '{cid}', matches {len(matched)} claims. Be more specific.")
+    if matched is None:
+        ctx.fail(f"No claim found matching: {cid}")
+
+    dag = DAG(store)
+    child_cids = dag.children(matched)
+    if not child_cids:
+        click.echo("No children.")
+        return
+    for child_cid in child_cids:
+        child = store.get(child_cid)
+        click.echo(f"{_short_cid(child_cid)}  {child.type.value:<12}  {child.claim}")
 
 
 @main.command("supersede")

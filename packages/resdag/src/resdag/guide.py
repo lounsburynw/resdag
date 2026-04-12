@@ -22,6 +22,7 @@ research results: commit claims, attach evidence, sync between peers.
     res log               List all claims (with filters)
     res show <cid>        Show claim details (supports CID prefix)
     res lineage <cid>     Show ancestor/descendant tree
+    res children <cid>    List direct children of a claim
     res supersede <old> <new>  Mark a claim as superseded
     res export <dir>      Export subgraph, static site, or Atom feed
     res sync <path>       Sync with another local resdag store
@@ -126,6 +127,12 @@ Find structural issues:
     res log --orphans                          # claims missing parent links
     res log --unverified                       # claims with no verification
     res log --active                           # hide superseded claims
+    res log --sort date                        # chronological (default)
+    res log --sort cid                         # alphabetical by CID
+
+List direct children of a claim:
+
+    res children <cid>
 
 Show an ancestor/descendant tree:
 

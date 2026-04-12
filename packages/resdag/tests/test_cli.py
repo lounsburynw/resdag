@@ -883,3 +883,58 @@ def test_ingest_attaches_evidence(tmp_path):
     show = runner.invoke(main, ["show", short])
     assert "Evidence:" in show.output
     assert "r.json" in show.output
+
+
+# --- Children command tests ---
+
+
+def test_children_lists_direct_children(tmp_path):
+    runner, root_short, mid_short, leaf_short = _build_chain(tmp_path)
+    result = runner.invoke(main, ["children", root_short])
+    assert result.exit_code == 0
+    assert "Middle finding" in result.output
+    # Leaf is a grandchild, not a direct child
+    assert "Leaf finding" not in result.output
+
+
+def test_children_leaf_has_none(tmp_path):
+    runner, _, _, leaf_short = _build_chain(tmp_path)
+    result = runner.invoke(main, ["children", leaf_short])
+    assert result.exit_code == 0
+    assert "No children" in result.output
+
+
+def test_children_nonexistent_cid_fails(tmp_path):
+    runner = CliRunner()
+    os.chdir(tmp_path)
+    runner.invoke(main, ["init"])
+    result = runner.invoke(main, ["children", "nonexistent"])
+    assert result.exit_code != 0
+    assert "No claim found" in result.output
+
+
+# --- Log sort order tests ---
+
+
+def test_log_default_sort_is_chronological(tmp_path):
+    """Default sort is newest-first by timestamp."""
+    runner = _init_and_seed(tmp_path)
+    result = runner.invoke(main, ["log"])
+    assert result.exit_code == 0
+    lines = [l for l in result.output.strip().splitlines() if l.strip()]
+    # Seeded with timestamps: 2026-03-28, 2026-03-30, 2026-04-01
+    # Newest first: hypothesis (Apr 1), method (Mar 30), result (Mar 28)
+    assert "Grokking is phase transition" in lines[0]
+    assert "Adam converges" in lines[1]
+    assert "Grokking at 10k steps" in lines[2]
+
+
+def test_log_sort_cid_is_alphabetical(tmp_path):
+    """--sort cid restores the old CID-alphabetical order."""
+    runner = _init_and_seed(tmp_path)
+    result = runner.invoke(main, ["log", "--sort", "cid"])
+    assert result.exit_code == 0
+    lines = [l for l in result.output.strip().splitlines() if l.strip()]
+    # CID prefixes should be in alphabetical order
+    cids = [l.split()[0] for l in lines]
+    assert cids == sorted(cids)
