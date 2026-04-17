@@ -270,7 +270,7 @@ class TestToDict:
             "total_claims", "type_distribution", "hypothesis_count",
             "hypothesis_coverage", "orphan_count", "orphan_rate",
             "branch_points", "branch_ratio", "max_linear_run",
-            "refutation_count", "warnings",
+            "refutation_count", "supersession_count", "warnings",
         }
         assert set(d.keys()) == expected_keys
 

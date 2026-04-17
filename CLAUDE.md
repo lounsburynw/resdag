@@ -36,7 +36,7 @@ The entire protocol centers on one data structure:
 ```json
 {
   "claim": "natural language assertion",
-  "type": "result | method | hypothesis | replication | equivalence | refutation",
+  "type": "result | method | hypothesis | replication | equivalence | refutation | supersession",
   "parents": ["cid..."],
   "evidence": ["cid..."],
   "domain": ["free.form.tags"],

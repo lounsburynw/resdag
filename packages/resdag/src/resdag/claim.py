@@ -18,6 +18,7 @@ class ClaimType(str, Enum):
     REPLICATION = "replication"
     EQUIVALENCE = "equivalence"
     REFUTATION = "refutation"
+    SUPERSESSION = "supersession"
     VERIFICATION = "verification"
 
 

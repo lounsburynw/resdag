@@ -23,8 +23,15 @@ def sample_claim():
 
 class TestClaimType:
     def test_all_types_exist(self):
-        expected = {"result", "method", "hypothesis", "replication", "equivalence", "refutation", "verification"}
+        expected = {
+            "result", "method", "hypothesis", "replication",
+            "equivalence", "refutation", "supersession", "verification",
+        }
         assert {t.value for t in ClaimType} == expected
+
+    def test_supersession_roundtrips(self):
+        assert ClaimType("supersession") == ClaimType.SUPERSESSION
+        assert ClaimType.SUPERSESSION.value == "supersession"
 
     def test_string_coercion(self):
         assert ClaimType("result") == ClaimType.RESULT

@@ -31,6 +31,7 @@ h2 { font-size: 1.1rem; margin-top: 1.5rem; color: #555; }
 .type-replication { background: #cce5ff; color: #004085; }
 .type-equivalence { background: #e2d9f3; color: #432874; }
 .type-refutation { background: #f8d7da; color: #721c24; }
+.type-supersession { background: #ede7d9; color: #5a4a2c; }
 .type-verification { background: #d6d8db; color: #383d41; }
 .tag { display: inline-block; padding: 0.1rem 0.4rem; margin: 0.1rem; background: #f0f0f0; border-radius: 3px; font-size: 0.8rem; }
 .meta { color: #666; font-size: 0.85rem; }

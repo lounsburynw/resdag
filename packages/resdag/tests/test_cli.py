@@ -660,13 +660,59 @@ def _setup_supersede(tmp_path):
     return runner, old_short, new_short, old_cid, new_cid
 
 
-def test_supersede_creates_refutation(tmp_path):
+def test_supersede_creates_supersession(tmp_path):
+    from resdag.claim import ClaimType
+    from resdag.storage.local import LocalStore
+
     runner, old_short, new_short, old_cid, new_cid = _setup_supersede(tmp_path)
     result = runner.invoke(main, ["supersede", old_short, new_short])
     assert result.exit_code == 0
     assert "Superseded" in result.output
     assert "Old finding" in result.output
     assert "Corrected finding" in result.output
+
+    # Verify the receipt is a SUPERSESSION claim, not a REFUTATION
+    store = LocalStore(tmp_path / ".resdag")
+    supersession_children = [
+        store.get(cid) for cid in store.list_cids()
+        if old_cid in store.get(cid).parents
+    ]
+    assert any(c.type is ClaimType.SUPERSESSION for c in supersession_children)
+    assert not any(c.type is ClaimType.REFUTATION for c in supersession_children)
+
+
+def test_supersede_legacy_refutation_still_detected(tmp_path):
+    """Supersessions committed before the SUPERSESSION type existed used
+    REFUTATION with a JSON payload. `res show` must still surface them."""
+    import json
+    import os
+    from resdag.claim import Claim, ClaimType
+    from resdag.storage.local import LocalStore
+
+    runner = CliRunner()
+    os.chdir(tmp_path)
+    runner.invoke(main, ["init"])
+    runner.invoke(main, ["commit", "-c", "Old legacy finding", "-t", "result"])
+    runner.invoke(main, ["commit", "-c", "Corrected legacy finding", "-t", "result"])
+
+    store = LocalStore(tmp_path / ".resdag")
+    cids = store.list_cids()
+    old_cid = next(c for c in cids if store.get(c).claim == "Old legacy finding")
+    new_cid = next(c for c in cids if store.get(c).claim == "Corrected legacy finding")
+
+    legacy = Claim(
+        claim=json.dumps({"superseded_by": new_cid, "reason": "pre-2026-04"}, sort_keys=True),
+        type=ClaimType.REFUTATION,
+        parents=(old_cid,),
+    )
+    store.put(legacy)
+
+    result = runner.invoke(main, ["show", old_cid[:12]])
+    assert result.exit_code == 0
+    assert "SUPERSEDED" in result.output
+
+    log_active = runner.invoke(main, ["log", "--active"])
+    assert "Old legacy finding" not in log_active.output
 
 
 def test_supersede_with_reason(tmp_path):

@@ -38,6 +38,8 @@ Use the `-t` flag on `res commit`:
     replication   A reproduction of an existing result
     equivalence   An assertion that two claims are semantically equivalent
     refutation    Evidence against an existing claim
+    supersession  A meta-claim retiring an earlier claim in favor of a newer
+                  one (created automatically by `res supersede`)
 
 ## Committing Claims
 

@@ -174,7 +174,7 @@ Then supersede the original:
 res supersede <original_cid> <new_cid>
 ```
 
-This creates a refutation node linking old to new, so the original is marked
+This creates a supersession node linking old to new, so the original is marked
 SUPERSEDED but never deleted (append-only protocol).
 
 ### 7c — Fix orphans

@@ -77,20 +77,27 @@ def _short_cid(cid: str, length: int = 12) -> str:
 
 
 def _superseded_cids(store: LocalStore, children_map: dict[str, list[str]]) -> set[str]:
-    """Return the set of CIDs that have been superseded by a REFUTATION child."""
+    """Return the set of CIDs superseded by a SUPERSESSION child.
+
+    Legacy supersession was encoded as a REFUTATION whose claim text is a
+    JSON object with a "superseded_by" key. Still recognized for pre-2026-04
+    claims; new supersessions use the dedicated SUPERSESSION type.
+    """
     import json
     superseded = set()
     for cid in store.list_cids():
         for child_cid in children_map.get(cid, []):
             child = store.get(child_cid)
-            if child.type != ClaimType.REFUTATION:
+            if child.type is ClaimType.SUPERSESSION:
+                superseded.add(cid)
                 continue
-            try:
-                data = json.loads(child.claim)
-                if "superseded_by" in data:
-                    superseded.add(cid)
-            except (json.JSONDecodeError, TypeError):
-                continue
+            if child.type is ClaimType.REFUTATION:
+                try:
+                    data = json.loads(child.claim)
+                    if "superseded_by" in data:
+                        superseded.add(cid)
+                except (json.JSONDecodeError, TypeError):
+                    continue
     return superseded
 
 
@@ -493,7 +500,7 @@ def supersede_cmd(ctx, old_cid, new_cid, reason):
 
     claim = Claim(
         claim=payload,
-        type=ClaimType.REFUTATION,
+        type=ClaimType.SUPERSESSION,
         parents=(old_matched,),
     )
     cid = dag.add(claim)
@@ -571,15 +578,17 @@ def show_cmd(ctx, cid):
         import json
         for child_cid in children_map.get(matched, []):
             child = store.get(child_cid)
-            if child.type == ClaimType.REFUTATION:
-                try:
-                    data = json.loads(child.claim)
-                    if "superseded_by" in data:
-                        replacement = data["superseded_by"]
-                        reason = data.get("reason", "")
-                        click.echo(f"SUPERSEDED by {_short_cid(replacement)}  {reason}")
-                except (json.JSONDecodeError, TypeError):
-                    pass
+            if child.type not in (ClaimType.SUPERSESSION, ClaimType.REFUTATION):
+                continue
+            try:
+                data = json.loads(child.claim)
+            except (json.JSONDecodeError, TypeError):
+                continue
+            if "superseded_by" not in data:
+                continue
+            replacement = data["superseded_by"]
+            reason = data.get("reason", "")
+            click.echo(f"SUPERSEDED by {_short_cid(replacement)}  {reason}")
     # Show equivalence cluster
     if claim.type != ClaimType.EQUIVALENCE:
         cluster = equivalence_cluster(matched, dag)

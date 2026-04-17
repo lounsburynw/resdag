@@ -35,6 +35,7 @@ class AuditReport:
     branch_ratio: float = 0.0
     max_linear_run: int = 0
     refutation_count: int = 0
+    supersession_count: int = 0
     warnings: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
@@ -49,6 +50,7 @@ class AuditReport:
             "branch_ratio": self.branch_ratio,
             "max_linear_run": self.max_linear_run,
             "refutation_count": self.refutation_count,
+            "supersession_count": self.supersession_count,
             "warnings": self.warnings,
         }
 
@@ -65,6 +67,7 @@ class AuditReport:
             f"Branching:  {self.branch_points} branch points ({_pct(self.branch_ratio)})",
             f"Linear run: {self.max_linear_run} (longest unbranched chain)",
             f"Refutations:{self.refutation_count}",
+            f"Supersessions:{self.supersession_count}",
         ]
 
         if self.warnings:
@@ -101,6 +104,7 @@ def audit_dag(store: ClaimStore) -> AuditReport:
     result_cids: list[str] = []
     orphans = 0
     refutations = 0
+    supersessions = 0
 
     for cid in cids:
         claim = store.get(cid)
@@ -117,6 +121,8 @@ def audit_dag(store: ClaimStore) -> AuditReport:
             result_cids.append(cid)
         if claim.type is ClaimType.REFUTATION:
             refutations += 1
+        if claim.type is ClaimType.SUPERSESSION:
+            supersessions += 1
 
         # Orphan: no parents, not a hypothesis
         if not claim.parents and claim.type is not ClaimType.HYPOTHESIS:
@@ -161,6 +167,7 @@ def audit_dag(store: ClaimStore) -> AuditReport:
         branch_ratio=branch_ratio,
         max_linear_run=max_run,
         refutation_count=refutations,
+        supersession_count=supersessions,
         warnings=warnings,
     )
 

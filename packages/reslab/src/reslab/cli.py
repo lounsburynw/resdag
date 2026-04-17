@@ -683,14 +683,14 @@ def migrate_tags(ctx: click.Context) -> None:
         )
         new_cid = store.put(new_claim)
 
-        # Create supersession refutation
+        # Create supersession receipt
         payload = _json.dumps({
             "superseded_by": new_cid,
             "reason": "Tags normalized to canonical form",
         }, sort_keys=True)
         sup = Claim(
             claim=payload,
-            type=ClaimType.REFUTATION,
+            type=ClaimType.SUPERSESSION,
             parents=(cid,),
         )
         store.put(sup)

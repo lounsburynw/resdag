@@ -425,14 +425,14 @@ class TestMigrateTags:
         )
         assert result.exit_code == 0
 
-        # Should have 3 claims: original + new + supersession refutation
+        # Should have 3 claims: original + new + supersession receipt
         cids = store.list_cids()
         assert len(cids) == 3
 
-        # Find the refutation
-        refutations = [store.get(c) for c in cids if store.get(c).type == ClaimType.REFUTATION]
-        assert len(refutations) == 1
-        assert old_cid in refutations[0].parents
+        # Find the supersession receipt
+        supersessions = [store.get(c) for c in cids if store.get(c).type == ClaimType.SUPERSESSION]
+        assert len(supersessions) == 1
+        assert old_cid in supersessions[0].parents
 
     def test_migrate_no_vocab_fails(self, store_and_repo: tuple[LocalStore, Path]) -> None:
         from reslab.cli import main
