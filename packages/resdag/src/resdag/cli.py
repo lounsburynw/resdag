@@ -9,6 +9,7 @@ import click
 
 from resdag.claim import Claim, ClaimType
 from resdag.dag import DAG
+from resdag.evidence import compute_cid as _evidence_cid
 from resdag.guide import GUIDE
 from resdag.discover.equivalence import equivalence_cluster, parse_equivalence
 from resdag.export.subgraph import (
@@ -158,9 +159,12 @@ def commit_cmd(ctx, claim_text, claim_file, claim_type, parents, domains, author
         path = Path(filepath)
         data = path.read_bytes()
         media_type = _guess_media_type(path.name)
+        prospective_cid = _evidence_cid(data)
+        deduped = store.has_evidence(prospective_cid)
         cid = store.put_evidence(data, filename=path.name, media_type=media_type)
         evidence_cids.append(cid)
-        click.echo(f"  evidence: {path.name} -> {_short_cid(cid)}")
+        hint = " (dedup)" if deduped else ""
+        click.echo(f"  evidence: {path.name} -> {_short_cid(cid)}{hint}")
 
     # Resolve parent CID prefixes
     resolved_parents = []
@@ -259,7 +263,10 @@ def ingest_cmd(ctx, json_file, template, claim_type, domains, parents):
 
     # Store the file as evidence
     media_type = _guess_media_type(path.name)
+    deduped = store.has_evidence(_evidence_cid(raw))
     evidence_cid = store.put_evidence(raw, filename=path.name, media_type=media_type)
+    if deduped:
+        click.echo(f"  evidence: {path.name} -> {_short_cid(evidence_cid)} (dedup)")
 
     count = 0
     for item in items:
@@ -514,8 +521,10 @@ def supersede_cmd(ctx, old_cid, new_cid, reason):
 
 @main.command("show")
 @click.argument("cid")
+@click.option("--truncate", "-t", type=int, default=None,
+              help="Truncate claim/parent/child text to N chars (with ellipsis).")
 @click.pass_context
-def show_cmd(ctx, cid):
+def show_cmd(ctx, cid, truncate):
     """Show details of a claim by CID (full or prefix)."""
     store = _get_store(ctx)
 
@@ -531,9 +540,14 @@ def show_cmd(ctx, cid):
     dag = DAG(store)
     children = dag.children(matched)
 
+    def _trunc(text: str) -> str:
+        if truncate is None or len(text) <= truncate:
+            return text
+        return text[:truncate] + "…"
+
     click.echo(f"CID:       {matched}")
     click.echo(f"Type:      {claim.type.value}")
-    click.echo(f"Claim:     {claim.claim}")
+    click.echo(f"Claim:     {_trunc(claim.claim)}")
     click.echo(f"Author:    {claim.author or '(none)'}")
     click.echo(f"Timestamp: {claim.timestamp}")
     if claim.domain:
@@ -542,12 +556,12 @@ def show_cmd(ctx, cid):
         click.echo("Parents:")
         for p in claim.parents:
             parent = store.get(p)
-            click.echo(f"  {_short_cid(p)}  {parent.claim}")
+            click.echo(f"  {_short_cid(p)}  {_trunc(parent.claim)}")
     if children:
         click.echo("Children:")
         for c in children:
             child = store.get(c)
-            click.echo(f"  {_short_cid(c)}  {child.claim}")
+            click.echo(f"  {_short_cid(c)}  {_trunc(child.claim)}")
     if claim.evidence:
         click.echo("Evidence:")
         for e in claim.evidence:
